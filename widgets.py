@@ -194,9 +194,8 @@ class Screen:
         self._display = display
         self._widgets = widgets
         self._periodic = Periodic(self._draw,5)
-        self._screen = Image.new(mode="RGBA",size=fb.size)
+        self._screen = Image.new(mode="RGBA",size=display.size)
         self._screen_drawable = ImageDraw.Draw(self._screen)
-        #screen_drawable.text((10, 10), "eth0.2", fill=getrgb("white"))
         (w,h) = display.size
         self._screen_drawable.rectangle([0,0,w-1,h-1], outline=getrgb("white"), fill=None, width=2)
         self._draw()

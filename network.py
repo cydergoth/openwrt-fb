@@ -10,7 +10,9 @@ import datetime
 import traceback
 import PIL.features
 from PIL import ImageFont
-from widgets import Widget, TitleDecorator, LineDecorator
+from widgets import Widget, TitleDecorator, BorderDecorator, Screen
+from periodic import Periodic
+import asyncio
 
 logging.basicConfig(level=logging.INFO)
 white = getrgb("white")
@@ -47,17 +49,15 @@ class IfSampler:
 
 class SeriesGraph(Widget):
 
-    def __init__(self, ifname, sampler, **kwargs):
-        super().__init__(title=ifname, **kwargs)
-        self._ifname = ifname
+    def __init__(self, sampler, **kwargs):
+        super().__init__(**kwargs)
         self._sampler = sampler
         self._max = 1
         super().draw()
 
-    def draw(self):
-        super().draw()
-        print("graph")
-        (w,h) = self.size
+    def ddraw(self,drawable):
+        super().ddraw(drawable)
+        (w,h) = self._size
         series = self._sampler.copy()
         self._max= max([*series,self._max])
         # normalize
@@ -65,23 +65,30 @@ class SeriesGraph(Widget):
         heights=[ x*h for x in scaled_samples ]
         s_x=0
         for sample in heights:
-            self.drawable.line([s_x,h,s_x,h-sample],fill=white)
-            s_x = s_x + 1
-        return self.image
+            drawable.line([s_x,h,s_x,h-sample],fill=white, width=2)
+            s_x = s_x + 2
 
 
 
 if __name__ == "__main__":
     fb = Framebuffer()
     #print(f"{fb.size} {fb.bpp}")
-    sent_sampler = IfSampler("eth0.2", "bytes_sent", 800)
-    recv_sampler = IfSampler("eth0.2", "bytes_recv", 800)
+    sent_sampler = IfSampler("eth0.2", "bytes_sent", 400)
+    recv_sampler = IfSampler("eth0.2", "bytes_recv", 400)
     with fb as display:
         display.clear((128, 128, 128,255))
 
-        sent = SeriesGraph("eth0.2:sent", sent_sampler, size=(800,80))
-        recv = SeriesGraph("eth0.2:recv", recv_sampler, size=(800,80))
-        widgets = [(sent, (40,40,800,80)), (recv, (40,140,800,80))]
+        sent = TitleDecorator(
+            BorderDecorator(
+                SeriesGraph(sent_sampler, size=(800,80)),
+                border_width=24),
+            "eth0.2:sent")
+        recv = TitleDecorator(
+            BorderDecorator(
+                SeriesGraph(recv_sampler, size=(800,80)),
+                border_width=24),
+                "eth0.2:recv")
+        widgets = [(sent, (40,40)), (recv, (40,160))]
         screen = Screen(display, widgets)
 
         loop=asyncio.get_event_loop()
