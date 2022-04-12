@@ -280,7 +280,7 @@ class Screen:
 
     def clear(self, color: Color = black) -> None:
         """Clear the screen"""
-        (w, h) = display.size
+        (w, h) = self._display.size
         self._screen_drawable.rectangle([0, 0, w, h], fill=color)
         self._display.write_screen(self._screen.tobytes())
 

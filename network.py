@@ -64,6 +64,7 @@ class SeriesGraph(Widget):
         # normalize
         scaled_samples = [x/self._max for x in series]
         heights = [x*h for x in scaled_samples]
+        drawable.rectangle([0, 0, w, h], fill=self._background)
         s_x = 0
         for sample in heights:
             drawable.line([s_x, h, s_x, h-sample], fill=white, width=2)
