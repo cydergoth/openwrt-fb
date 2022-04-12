@@ -2,7 +2,7 @@ import os
 import mmap
 import traceback
 from collections import namedtuple
-from typing import Union, Any
+from typing import Optional, Any
 
 Dimension = namedtuple("Dimension", "w h")
 Color = namedtuple("Color", "r g b a")
@@ -12,8 +12,8 @@ class Framebuffer():
 
     def __init__(self, fbdev: str = "fb0"):
         self._fbdev = fbdev
-        self._fb: Union[int, None] = None
-        self._fb_bytes: Union[Any, None] = None
+        self._fb: Optional[int] = None
+        self._fb_bytes: Optional[Any] = None
 
         with open(f"/sys/class/graphics/{fbdev}/name", "r") as f:
             data = f.read()
@@ -57,8 +57,10 @@ class Framebuffer():
     def __exit__(self, exc_type, exc_value, tb) -> None:
         if exc_type is not None:
             traceback.print_exception(exc_type, exc_value, tb)
-        self._fb_bytes.close()
-        os.close(self._fb)
+        if self._fb_bytes is not None:
+            self._fb_bytes.close()
+        if self._fb is not None:
+            os.close(self._fb)
 
     # fill should be (rgba)
     def clear(self, fill: Color):
@@ -66,11 +68,13 @@ class Framebuffer():
         mapped = (b, g, r, a)
         (x, y) = self.size
         screen = bytearray(bytes(mapped))*x*y
-        self._fb_bytes.write(screen)
+        if self._fb_bytes is not None:
+            self._fb_bytes.write(screen)
 
     def write_screen(self, some_bytes: list[bytes]) -> None:
-        self._fb_bytes.seek(0)
-        self._fb_bytes.write(some_bytes)
+        if self._fb_bytes is not None:
+            self._fb_bytes.seek(0)
+            self._fb_bytes.write(some_bytes)
 
 
 if __name__ == "__main__":
