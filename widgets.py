@@ -1,5 +1,5 @@
 import sys
-from fb import Framebuffer
+from fb import Framebuffer, Color, Dimension
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageColor import getrgb
 import traceback
@@ -9,8 +9,6 @@ from periodic import Periodic
 
 # Define types so we can use type checking
 Point = namedtuple("Point", "x y")
-Dimension = namedtuple("Dimension", "w h")
-Color = namedtuple("Color", "r g b a")
 
 # Get the values for the default colors
 white: Color = getrgb("white")
@@ -262,7 +260,7 @@ class Screen:
 
     def __init__(self,
                  display: Framebuffer,
-                 widgets: list[tuple[Widget,Point]],
+                 widgets: list[tuple[Widget, Point]],
                  interval: int = 5):
         """Create a new screen for the specific display
 
@@ -304,7 +302,7 @@ class Screen:
 if __name__ == "__main__":
     fb = Framebuffer()
     with fb as display:
-        display.clear((128, 128, 128, 255))
+        display.clear(Color(128, 128, 128, 255))
         t = TextWidget("Hello World")
         w = TitleDecorator(BorderDecorator(t, border_width=24), "Title")
-        screen = Screen(display, [(w,Point(0,0))])
+        screen = Screen(display, [(w, Point(0, 0))])
