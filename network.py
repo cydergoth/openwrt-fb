@@ -8,6 +8,7 @@ from widgets import Widget, TitleDecorator, BorderDecorator, Screen, Point
 from periodic import Periodic
 import asyncio
 from typing import cast, Tuple
+from math import floor
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,6 +20,7 @@ def rgb(color: str) -> Color:
 white = rgb("white")
 black = rgb("black")
 
+MAX_SAMPLES: int = 400
 
 class IfSampler:
 
@@ -50,8 +52,8 @@ class IfSampler:
 
 class SeriesGraph(Widget):
 
-    def __init__(self, sampler, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, sampler, background=black,  **kwargs):
+        super().__init__(background=background, **kwargs)
         self._sampler = sampler
         self._max = 1
         super().draw()
@@ -63,7 +65,7 @@ class SeriesGraph(Widget):
         self._max = max([*series, self._max])
         # normalize
         scaled_samples = [x/self._max for x in series]
-        heights = [x*h for x in scaled_samples]
+        heights = [floor(x*h) for x in scaled_samples]
         drawable.rectangle([0, 0, w, h], fill=self._background)
         s_x = 0
         for sample in heights:
@@ -73,19 +75,19 @@ class SeriesGraph(Widget):
 
 if __name__ == "__main__":
     fb = Framebuffer()
-    sent_sampler = IfSampler("eth0.2", "bytes_sent", 400)
-    recv_sampler = IfSampler("eth0.2", "bytes_recv", 400)
+    sent_sampler = IfSampler("eth0.2", "bytes_sent", MAX_SAMPLES)
+    recv_sampler = IfSampler("eth0.2", "bytes_recv", MAX_SAMPLES)
     with fb as display:
         display.clear(Color(128, 128, 128, 255))
 
         sent = TitleDecorator(
             BorderDecorator(
-                SeriesGraph(sent_sampler, size=(800, 80)),
+                SeriesGraph(sent_sampler, size=(MAX_SAMPLES*2, 80)),
                 border_width=24),
             "eth0.2:sent")
         recv = TitleDecorator(
             BorderDecorator(
-                SeriesGraph(recv_sampler, size=(800, 80)),
+                SeriesGraph(recv_sampler, size=(MAX_SAMPLES*2, 80)),
                 border_width=24),
             "eth0.2:recv")
         widgets: list[Tuple[Widget, Point]] = [(sent, Point(40, 40)), (recv, Point(40, 160))]
