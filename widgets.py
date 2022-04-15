@@ -6,6 +6,8 @@ import traceback
 import PIL.features
 from collections import namedtuple
 from periodic import Periodic
+from datetime import datetime, timezone
+from typing import Tuple, Callable
 
 # Define types so we can use type checking
 Point = namedtuple("Point", "x y")
@@ -13,6 +15,8 @@ Point = namedtuple("Point", "x y")
 # Get the values for the default colors
 white: Color = getrgb("white")
 black: Color = getrgb("black")
+green: Color = getrgb("green")
+red: Color = getrgb("red")
 
 # Bail if freetype isn't available
 if not PIL.features.check("freetype2"):
@@ -74,6 +78,107 @@ class Widget:
             drawable.rectangle([0, 0, w, h], fill=self._background)
 
 
+class CarouselWidget(Widget):
+    """Widget to cycle through a set of pages of other widgets"""
+
+    def __init__(self,
+                 pages: list[Tuple[int, list[Tuple[Widget, Point]]]],
+                 background: Color = black,
+                 **kwargs):
+        """Create a new CarouselWidget
+
+        Parameters
+        ----------
+        pages: list[Tuple[int, list[Tuple[Widget, Point]]]]
+            a list of pages (delay, widgets) where widgets is list of (widget, origin)
+        background: Color
+            The background color for the entire text widget
+        **kwargs: map of arguments
+            Passed to the superclass (Widget)
+        """
+        super().__init__(**kwargs)
+        self._last_displayed: int = 0
+        self._pages: list[Tuple[int, list[Tuple[Widget, Point]]]] = pages
+        self._page: int = 0
+        self._delay: int = 0
+
+    def _check_page(self):
+        """Rotate the page if sufficient time has passed"""
+        now = datetime.now().timestamp()
+        if now - self._last_displayed > self._delay:
+            self._last_displayed = now
+            self._page = (self._page + 1) % len(self._pages)
+            (self._delay, _) = self._pages[self._page]
+
+    def ddraw(self, drawable):
+        """Draw the widgets from the current page"""
+        super().ddraw(drawable)
+        self._check_page()
+        (delay, page) = self._pages[self._page]
+        for (widget, origin) in page:
+            img = widget.draw()
+            self._img.alpha_composite(img, origin)
+
+
+class ClockWidget(Widget):
+
+    @classmethod
+    def _get_size(cls, text: str, font: ImageFont) -> Dimension:
+        """Calculate the size of this widget based on the text"""
+        (x, y, w, h) = font.getbbox(text, anchor="la")
+        return Dimension(w, h)
+
+    def __init__(self,
+                 font: ImageFont = font,
+                 background: Color = black,
+                 foreground: Color = white,
+                 **kwargs):
+        """Create a new ClockWidget
+
+        Parameters
+        ----------
+        font: ImageFont
+            The PIL font (truetype) to render the text with. Includes font size!
+        background: Color
+            The background color for the entire text widget
+        foreground: Color
+            The color of the text
+        **kwargs: map of arguments
+            Passed to the superclass (Widget)
+        """
+        super().__init__(size=ClockWidget._get_size("XX:XX:XX", font),
+                         background=background,
+                         **kwargs)
+        self._font: ImageFont = font
+        self._foreground: Color = foreground
+
+    def ddraw(self, drawable: ImageDraw) -> None:
+        """Render the text into this widget"""
+        super().ddraw(drawable)
+        now = datetime.now(timezone.utc)
+        now_str: str = now.astimezone().strftime("%H:%M:%S")
+        drawable.text((0, 0), now_str, font=self._font, fill=self._foreground, anchor="ra")
+
+
+class BarGaugeWidget(Widget):
+    """Widget to draw a Bar Gauge, often used for percentages
+
+    Parameters
+    ----------
+    value_reporter: Callable[[None]], float]
+            a function which returns a value between 0 and 1 when called
+    """
+    def __init(self, value_reporter: Callable[[None], float], **kwargs):
+        self._value_reporter = value_reporter
+
+    def ddraw(self, drawable):
+        (w, h) = self._size
+        value = self._value_reporter()  # 0 .. 1
+        split: int = round(self._size * value)
+        drawable.rectangle([0, 0, h - split, w], fill=green)
+        drawable.rectangle([0, h, split, w], fill=red)
+
+
 class TextWidget(Widget):
     """Widget to draw a line of text"""
 
@@ -123,7 +228,11 @@ class WidgetDecorator(Widget):
     Decorator widgets always draw on top of their client widgets unless ddraw() is overridden
     """
 
-    def __init__(self, widget: Widget, origin: Point = Point(0, 0), **kwargs):
+    def __init__(self,
+                 widget: Widget,
+                 size: Dimension,
+                 origin: Point = Point(0, 0),
+                 **kwargs):
         """Create a new WidgetDecorator
 
         Parameters
@@ -133,7 +242,7 @@ class WidgetDecorator(Widget):
         origin: Point
               where in the decorator widget the top left of the wrapped widget will be
         """
-        super().__init__(**kwargs)
+        super().__init__(size, **kwargs)
         self._origin = origin
         self._widget = widget
 
@@ -183,14 +292,13 @@ class TitleDecorator(WidgetDecorator):
               font for the title
         """
         super().__init__(widget,
-                         size=widget.size,
+                         widget.size,
                          background=background,
                          **kwargs)
         self._title = title
         self._font = font
         self._foreground = foreground
         self.loc = loc  # Currently ignored, will be e.g. top_left etc
-        self.draw()
 
     def _decorate(self, drawable) -> None:
         """Draw the decorator on the widget
@@ -227,7 +335,7 @@ class BorderDecorator(WidgetDecorator):
                  line_width: int = 2,
                  **kwargs):
         """Create a new Border decorator
-e
+
         Parameters
         ----------
         widget: Widget
@@ -240,8 +348,8 @@ e
               Width of the pen used to draw the border
         """
         super().__init__(widget,
+                         BorderDecorator._get_size(widget, border_width),
                          origin=Point(border_width, border_width),
-                         size=BorderDecorator._get_size(widget, border_width),
                          **kwargs)
         self._border_color = border_color
         self._border_width = border_width
@@ -251,8 +359,10 @@ e
         """Draw the client widget and decorate it with the border"""
         (w, h) = self._size
         offset = self._border_width//2
-        drawable.rectangle([offset, offset, w-offset, h-offset],
-                           outline=self._border_color, width=self._line_width)
+        if self._border_color is not None:
+            drawable.rectangle([offset, offset, w-offset, h-offset],
+                               outline=self._border_color,
+                               width=self._line_width)
 
 
 class Screen:
@@ -261,7 +371,7 @@ class Screen:
     def __init__(self,
                  display: Framebuffer,
                  widgets: list[tuple[Widget, Point]],
-                 interval: int = 5):
+                 interval: int = 1):
         """Create a new screen for the specific display
 
         display: Framebuffer
@@ -277,6 +387,7 @@ class Screen:
         self._screen = Image.new(mode="RGBA", size=display.size)
         self._screen_drawable = ImageDraw.Draw(self._screen)
         self.clear()
+        self._draw()
 
     def clear(self, color: Color = black) -> None:
         """Clear the screen"""
@@ -292,7 +403,11 @@ class Screen:
                 self._screen.alpha_composite(img, viewport)
             except Exception as e:
                 traceback.print_tb(e.__traceback__)
-        self._display.write_screen(self._screen.tobytes())
+        # Nasty trick to swap two of the channels for the specific
+        # ordering of the framebuffer
+        (r, g, b, a) = self._screen.split()
+        im_bgr = Image.merge('RGBA', (b, g, r, a))
+        self._display.write_screen(im_bgr.tobytes())
 
     async def start(self):
         """Start periodically rendering the screen"""

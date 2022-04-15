@@ -1,10 +1,19 @@
 import logging
 from fb import Framebuffer, Color
+from PIL import ImageFont
 from PIL.ImageColor import getrgb
 from collections import deque
 import psutil
 import datetime
-from widgets import Widget, TitleDecorator, BorderDecorator, Screen, Point
+from widgets import (
+    Widget,
+    TitleDecorator,
+    BorderDecorator,
+    Screen,
+    Point,
+    Dimension,
+    WidgetDecorator
+    )
 from periodic import Periodic
 import asyncio
 from typing import cast, Tuple
@@ -12,15 +21,13 @@ from math import floor
 
 logging.basicConfig(level=logging.INFO)
 
-
-def rgb(color: str) -> Color:
-    return cast(Color, getrgb(color))
-
-
-white = rgb("white")
-black = rgb("black")
+white: Color = getrgb("white")
+black: Color = getrgb("black")
+blue: Color  = getrgb("blue")
 
 MAX_SAMPLES: int = 400
+graph_font = ImageFont.truetype("inconsolata.ttf", 12)
+
 
 class IfSampler:
 
@@ -32,7 +39,7 @@ class IfSampler:
         self._last_sample_ts = datetime.datetime.now()
         sample = psutil.net_io_counters(pernic=True)[self._ifname]
         self._last_sample = getattr(sample, attribute)
-        self._scrape = Periodic(self._do_scrape, 5)
+        self._scrape = Periodic(self._do_scrape, 1)
 
     async def start(self):
         return await self._scrape.start()
@@ -52,11 +59,20 @@ class IfSampler:
 
 class SeriesGraph(Widget):
 
-    def __init__(self, sampler, background=black,  **kwargs):
-        super().__init__(background=background, **kwargs)
+    def __init__(self, sampler, size: Dimension, background=black,  **kwargs):
+        super().__init__(size, background=background, **kwargs)
         self._sampler = sampler
         self._max = 1
+        self._current = 0
         super().draw()
+
+    @property
+    def current(self):
+        return self._current
+
+    @property
+    def max(self):
+        return self._max
 
     def ddraw(self, drawable):
         super().ddraw(drawable)
@@ -71,6 +87,66 @@ class SeriesGraph(Widget):
         for sample in heights:
             drawable.line([s_x, h, s_x, h-sample], fill=white, width=2)
             s_x = s_x + 2
+        if len(series) > 0:
+            self._current = series[-1]
+
+
+class SeriesGraphDecorator(WidgetDecorator):
+
+    @classmethod
+    def _get_loc(cls, font: ImageFont) -> Point:
+        # origin of the graph is 1px right of left axis and 1/2 way down upper left label
+        # Upper Left axis tag
+        (_, _, ul_fw, fh) = font.getbbox("9999", anchor="la")  # MiB/s
+        oy = fh//2
+        ox = 5 + ul_fw
+        return Point(ox, oy)
+
+    @classmethod
+    def _get_size(cls, widget: SeriesGraph, font: ImageFont) -> Dimension:
+        """Calculate the size of this widget based on the decorations"""
+        (w, h) = widget.size
+
+        # Left axis Line and ticks
+        dw = w + 5
+
+        # Lower axis Line and ticks
+        dh = h + 5
+
+        # Lower Left axis tag
+        (_, _, ll_fw, fh) = font.getbbox(f"-{(w//2)//60}", anchor="la")
+        dh = dh + fh
+
+        # Lower right axis tag
+        (_, _, fw, _) = font.getbbox("now", anchor="la")
+        dw = dw + fw/2
+
+        # Upper Left axis tag
+        (_, _, ul_fw, fh) = font.getbbox("9999", anchor="la")  # MiB/s
+        dw = dw + max(ul_fw, ll_fw//2)
+        dh = dh + fh//2
+
+        return Dimension(int(dw), int(dh))
+
+    def __init__(self, widget: SeriesGraph, font: ImageFont, **kwargs):
+        super().__init__(widget,
+                         size=SeriesGraphDecorator._get_size(widget, font),
+                         origin=SeriesGraphDecorator._get_loc(font),
+                         **kwargs)
+        self._font = font
+        self._origin = self._get_loc(font)
+
+    def _decorate(self, drawable):
+        (ox, oy) = self._origin
+        (ww, wh) = self._widget.size
+        drawable.line([ox-2, oy, ox-2, oy+wh+1], fill=blue, width=2)  # Y axis
+        drawable.line([ox-1, oy+wh+1, ox-1+ww, oy+wh+1], fill=blue, width=2)  # X axis
+        # Upper left axis tag
+        maxInMiB = self._widget.max//1048576
+        drawable.text((0, 0), f"{maxInMiB}")
+        # Bottom left axix label
+        (_, _, fw, fh) = self._font.getbbox(f"-{(ww/2)//60}", anchor="la")
+        drawable.text((ox-1-fw/2, oy+4+wh), f"-{(ww/2)//60}", anchor="la")
 
 
 if __name__ == "__main__":
@@ -80,17 +156,17 @@ if __name__ == "__main__":
     with fb as display:
         display.clear(Color(128, 128, 128, 255))
 
-        sent = TitleDecorator(
-            BorderDecorator(
-                SeriesGraph(sent_sampler, size=(MAX_SAMPLES*2, 80)),
-                border_width=24),
-            "eth0.2:sent")
+        ssg = SeriesGraph(sent_sampler, size=Dimension(MAX_SAMPLES*2, 80))
+        ssgd = SeriesGraphDecorator(ssg, graph_font)
+        sent = TitleDecorator(BorderDecorator(ssgd, border_width=24), "eth0.2:sent")
         recv = TitleDecorator(
             BorderDecorator(
-                SeriesGraph(recv_sampler, size=(MAX_SAMPLES*2, 80)),
+                SeriesGraphDecorator(
+                    SeriesGraph(recv_sampler, size=Dimension(MAX_SAMPLES*2, 80)),
+                    graph_font),
                 border_width=24),
             "eth0.2:recv")
-        widgets: list[Tuple[Widget, Point]] = [(sent, Point(40, 40)), (recv, Point(40, 160))]
+        widgets: list[Tuple[Widget, Point]] = [(sent, Point(40, 40)), (recv, Point(40, 200))]
         screen = Screen(display, widgets)
 
         loop = asyncio.get_event_loop()
