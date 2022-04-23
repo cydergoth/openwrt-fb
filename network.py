@@ -1,10 +1,9 @@
 import logging
-from fb import Framebuffer, Color
+import psutil
+import datetime
 from PIL import ImageFont
 from PIL.ImageColor import getrgb
 from collections import deque
-import psutil
-import datetime
 from widgets import (
     Widget,
     TitleDecorator,
@@ -18,6 +17,7 @@ from periodic import Periodic
 import asyncio
 from typing import cast, Tuple
 from math import floor
+from local_types import Color, Dimension
 
 logging.basicConfig(level=logging.INFO)
 
@@ -30,8 +30,10 @@ graph_font = ImageFont.truetype("inconsolata.ttf", 12)
 
 
 class IfSampler:
+    """Class to sample some statistics from an ether interface."""
 
     def __init__(self, ifname, attribute, sample_len):
+        """Create a new sampler for a specific interface."""
         self._ifname = ifname
         self._attribute = attribute
         self._sample_len = sample_len
@@ -150,7 +152,8 @@ class SeriesGraphDecorator(WidgetDecorator):
 
 
 if __name__ == "__main__":
-    fb = Framebuffer()
+    from fb import DirectFB
+    fb = DirectFB()
     sent_sampler = IfSampler("eth0.2", "bytes_sent", MAX_SAMPLES)
     recv_sampler = IfSampler("eth0.2", "bytes_recv", MAX_SAMPLES)
     with fb as display:

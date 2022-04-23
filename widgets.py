@@ -1,16 +1,14 @@
+"""Set of trivial widgets for displaying information on a Framebuffer."""
 import sys
-from fb import Framebuffer, Color, Dimension
-from PIL import Image, ImageDraw, ImageFont
-from PIL.ImageColor import getrgb
 import traceback
-import PIL.features
-from collections import namedtuple
-from periodic import Periodic
 from datetime import datetime, timezone
 from typing import Tuple, Callable
-
-# Define types so we can use type checking
-Point = namedtuple("Point", "x y")
+from PIL import Image, ImageDraw, ImageFont
+from PIL.ImageColor import getrgb
+import PIL.features
+from periodic import Periodic
+from local_types import Color, Dimension, Point
+from framebuffer import Framebuffer
 
 # Get the values for the default colors
 white: Color = getrgb("white")
@@ -28,13 +26,13 @@ font = ImageFont.truetype("inconsolata.ttf", 24)
 
 
 class Widget:
-    """Base class for all widgets"""
+    """Base class for all widgets."""
 
     def __init__(self,
                  size: Dimension,
                  background: Color = None  # Set to None for no fill
                  ):
-        """Create a new widget
+        """Create a new widget.
 
         Parameters
         ----------
@@ -50,42 +48,42 @@ class Widget:
 
     @property
     def size(self) -> Dimension:
-        """Get the size of this widget in pixels"""
+        """Get the size of this widget in pixels."""
         return self._size
 
     @property
     def img(self) -> Image:
-        """Get the PIL image backing this widget"""
+        """Get the PIL image backing this widget."""
         return self._img
 
     @property
     def drawable(self) -> ImageDraw:
-        """Get the widget's drawing surface"""
+        """Get the widget's drawing surface."""
         return self._drawable
 
     def draw(self) -> Image:
-        """Draw this widget into the backing image"""
+        """Draw this widget into the backing image."""
         self.ddraw(self._drawable)
         return self._img
 
     def ddraw(self, drawable) -> None:
-        """Draw the widget components into the widget's backing image
-        using the drawing surface
+        """Draw the widget components into the widget's backing image using the drawing surface.
 
-        If background is set this will clear the widget image"""
+        If background is set this will clear the widget image
+        """
         if self._background is not None:
             (w, h) = self._size
             drawable.rectangle([0, 0, w, h], fill=self._background)
 
 
 class CarouselWidget(Widget):
-    """Widget to cycle through a set of pages of other widgets"""
+    """Widget to cycle through a set of pages of other widgets."""
 
     def __init__(self,
                  pages: list[Tuple[int, list[Tuple[Widget, Point]]]],
                  background: Color = black,
                  **kwargs):
-        """Create a new CarouselWidget
+        """Create a new CarouselWidget.
 
         Parameters
         ----------
@@ -103,7 +101,7 @@ class CarouselWidget(Widget):
         self._delay: int = 0
 
     def _check_page(self):
-        """Rotate the page if sufficient time has passed"""
+        """Rotate the page if sufficient time has passed."""
         now = datetime.now().timestamp()
         if now - self._last_displayed > self._delay:
             self._last_displayed = now
@@ -111,7 +109,7 @@ class CarouselWidget(Widget):
             (self._delay, _) = self._pages[self._page]
 
     def ddraw(self, drawable):
-        """Draw the widgets from the current page"""
+        """Draw the widgets from the current page."""
         super().ddraw(drawable)
         self._check_page()
         (delay, page) = self._pages[self._page]
@@ -121,10 +119,11 @@ class CarouselWidget(Widget):
 
 
 class ClockWidget(Widget):
+    """Simple clock widget."""
 
     @classmethod
     def _get_size(cls, text: str, font: ImageFont) -> Dimension:
-        """Calculate the size of this widget based on the text"""
+        """Calculate the size of this widget based on the text."""
         (x, y, w, h) = font.getbbox(text, anchor="la")
         return Dimension(w, h)
 
@@ -133,7 +132,7 @@ class ClockWidget(Widget):
                  background: Color = black,
                  foreground: Color = white,
                  **kwargs):
-        """Create a new ClockWidget
+        """Create a new ClockWidget.
 
         Parameters
         ----------
@@ -153,7 +152,7 @@ class ClockWidget(Widget):
         self._foreground: Color = foreground
 
     def ddraw(self, drawable: ImageDraw) -> None:
-        """Render the text into this widget"""
+        """Render the text into this widget."""
         super().ddraw(drawable)
         now = datetime.now(timezone.utc)
         now_str: str = now.astimezone().strftime("%H:%M:%S")
@@ -161,17 +160,23 @@ class ClockWidget(Widget):
 
 
 class BarGaugeWidget(Widget):
-    """Widget to draw a Bar Gauge, often used for percentages
+    """Widget to draw a Bar Gauge, often used for percentages.
 
     Parameters
     ----------
     value_reporter: Callable[[None]], float]
             a function which returns a value between 0 and 1 when called
     """
-    def __init(self, value_reporter: Callable[[None], float], **kwargs):
+
+    def __init__(self,
+                 value_reporter: Callable[[None], float],
+                 **kwargs):
+        """Create a new bar graph widget."""
+        super().__init__(**kwargs)
         self._value_reporter = value_reporter
 
     def ddraw(self, drawable):
+        """Render the bar graph into this widget."""
         (w, h) = self._size
         value = self._value_reporter()  # 0 .. 1
         split: int = round(self._size * value)
@@ -180,11 +185,11 @@ class BarGaugeWidget(Widget):
 
 
 class TextWidget(Widget):
-    """Widget to draw a line of text"""
+    """Widget to draw a line of text."""
 
     @classmethod
     def _get_size(cls, text: str, font: ImageFont) -> Dimension:
-        """Calculate the size of this widget based on the text"""
+        """Calculate the size of this widget based on the text."""
         (x, y, w, h) = font.getbbox(text, anchor="la")
         return Dimension(w, h)
 
@@ -194,7 +199,7 @@ class TextWidget(Widget):
                  background: Color = black,
                  foreground: Color = white,
                  **kwargs):
-        """Create a new TextWidget
+        """Create a new TextWidget.
 
         Parameters
         ----------
@@ -217,13 +222,13 @@ class TextWidget(Widget):
         self._foreground = foreground
 
     def ddraw(self, drawable: ImageDraw) -> None:
-        """Render the text into this widget"""
+        """Render the text into this widget."""
         super().ddraw(drawable)
         drawable.text((0, 0), self._text, font=self._font, fill=self._foreground, anchor="la")
 
 
 class WidgetDecorator(Widget):
-    """Class for a widget which wraps another widget and adds extra decoration
+    """Class for a widget which wraps another widget and adds extra decoration.
 
     Decorator widgets always draw on top of their client widgets unless ddraw() is overridden
     """
@@ -233,7 +238,7 @@ class WidgetDecorator(Widget):
                  size: Dimension,
                  origin: Point = Point(0, 0),
                  **kwargs):
-        """Create a new WidgetDecorator
+        """Create a new WidgetDecorator.
 
         Parameters
         ----------
@@ -248,28 +253,28 @@ class WidgetDecorator(Widget):
 
     @property
     def widget(self) -> Widget:
-        """Get the wrapped widget"""
+        """Get the wrapped widget."""
         return self._widget
 
     def ddraw(self, drawable: ImageDraw) -> None:
-        """Draw the wrapped widget and decorate it"""
+        """Draw the wrapped widget and decorate it."""
         super().ddraw(drawable)
         widget_img = self._widget.draw()
         self._img.alpha_composite(widget_img, self._origin)
         self._decorate(drawable)
 
     def _decorate(self, drawable: ImageDraw) -> None:
-        """Draw the decorators on top of the wrapped widget"""
+        """Draw the decorators on top of the wrapped widget."""
         pass
 
 
 class TitleDecorator(WidgetDecorator):
-    """Class for a widget which wraps another widget and adds a title decoration
-
+    """Class for a widget which wraps another widget and adds a title decoration.
 
     This widget is intended to be used as a wrapper for BorderDecorator
     so it assumes the space to render the title into will be provided
-    by the underlying BorderDecorator"""
+    by the underlying BorderDecorator
+    """
 
     def __init__(self,
                  widget: Widget,
@@ -279,11 +284,10 @@ class TitleDecorator(WidgetDecorator):
                  background: Color = black,
                  loc: str = "top_left",
                  **kwargs):
-        """Create a new TitleDecorator
+        """Create a new TitleDecorator.
 
         Parameters
         ----------
-
         widget: Widget
               the widget to wrap with this decorator
         title: str
@@ -301,13 +305,13 @@ class TitleDecorator(WidgetDecorator):
         self.loc = loc  # Currently ignored, will be e.g. top_left etc
 
     def _decorate(self, drawable) -> None:
-        """Draw the decorator on the widget
+        """Draw the decorator on the widget.
 
         This method uses an explicit drawable
         """
         bbox = self._font.getbbox(self._title, anchor="la")
         (x, y, w, h) = bbox
-        drawable.rectangle([x+24, 0, w+24, h], fill=self._background)
+        drawable.rectangle([x + 24, 0, w + 24, h], fill=self._background)
         drawable.text((24, 0),
                       self._title,
                       font=self._font,
@@ -316,7 +320,7 @@ class TitleDecorator(WidgetDecorator):
 
 
 class BorderDecorator(WidgetDecorator):
-    """Decorator to render a border around another widget
+    """Decorator to render a border around another widget.
 
     This decorator allocates a new Image with sufficient additional
     space for the border
@@ -324,9 +328,9 @@ class BorderDecorator(WidgetDecorator):
 
     @classmethod
     def _get_size(cls, widget: Widget, border_width: int) -> Dimension:
-        """Calculate the additional size needed for the image with border"""
+        """Calculate the additional size needed for the image with border."""
         (w, h) = widget.size
-        return Dimension(w+border_width*2, h+border_width*2)
+        return Dimension(w + border_width * 2, h + border_width * 2)
 
     def __init__(self,
                  widget: Widget,
@@ -334,7 +338,7 @@ class BorderDecorator(WidgetDecorator):
                  border_width: int = 6,
                  line_width: int = 2,
                  **kwargs):
-        """Create a new Border decorator
+        """Create a new Border decorator.
 
         Parameters
         ----------
@@ -356,23 +360,23 @@ class BorderDecorator(WidgetDecorator):
         self._line_width = line_width
 
     def _decorate(self, drawable: ImageDraw) -> None:
-        """Draw the client widget and decorate it with the border"""
+        """Draw the client widget and decorate it with the border."""
         (w, h) = self._size
         offset = self._border_width//2
         if self._border_color is not None:
-            drawable.rectangle([offset, offset, w-offset, h-offset],
+            drawable.rectangle([offset, offset, w - offset, h - offset],
                                outline=self._border_color,
                                width=self._line_width)
 
 
 class Screen:
-    """Screen widget which represents all the widgets on a screen"""
+    """Screen widget which represents all the widgets on a screen."""
 
     def __init__(self,
                  display: Framebuffer,
                  widgets: list[tuple[Widget, Point]],
                  interval: int = 1):
-        """Create a new screen for the specific display
+        """Create a new screen for the specific display.
 
         display: Framebuffer
                 a simple python wrapper around the Linux framebuffer device
@@ -381,7 +385,7 @@ class Screen:
         interval: int
                 interval in seconds between screen refreshes
         """
-        self._display = display
+        self._display: Framebuffer = display
         self._widgets = widgets
         self._periodic = Periodic(self._draw, interval)
         self._screen = Image.new(mode="RGBA", size=display.size)
@@ -390,32 +394,36 @@ class Screen:
         self._draw()
 
     def clear(self, color: Color = black) -> None:
-        """Clear the screen"""
+        """Clear the screen."""
         (w, h) = self._display.size
         self._screen_drawable.rectangle([0, 0, w, h], fill=color)
         self._display.write_screen(self._screen.tobytes())
 
     def _draw(self) -> None:
-        """Draw all the widgets into the screen Image and send it to the Framebuffer"""
+        """Draw all the widgets into the screen Image and send it to the Framebuffer."""
         for (widget, viewport) in self._widgets:
             try:
                 img = widget.draw()
                 self._screen.alpha_composite(img, viewport)
             except Exception as e:
                 traceback.print_tb(e.__traceback__)
-        # Nasty trick to swap two of the channels for the specific
-        # ordering of the framebuffer
-        (r, g, b, a) = self._screen.split()
-        im_bgr = Image.merge('RGBA', (b, g, r, a))
+        if self._display.mode == "BGRA":
+            # Nasty trick to swap two of the channels for the specific
+            # ordering of the framebuffer
+            (r, g, b, a) = self._screen.split()
+            im_bgr = Image.merge('RGBA', (b, g, r, a))
+        else:
+            im_bgr = self._screen
         self._display.write_screen(im_bgr.tobytes())
 
     async def start(self):
-        """Start periodically rendering the screen"""
+        """Start periodically rendering the screen."""
         await self._periodic.start()
 
 
 if __name__ == "__main__":
-    fb = Framebuffer()
+    from fb import DirectFB
+    fb = DirectFB()
     with fb as display:
         display.clear(Color(128, 128, 128, 255))
         t = TextWidget("Hello World")
