@@ -8,13 +8,10 @@ from typing import Tuple
 from framebuffer import Framebuffer
 
 from local_types import Color, Dimension, Point
+from panel import panel, MAX_SAMPLES
+from widgets import Screen
 
-from network import IfSampler, SeriesGraph, SeriesGraphDecorator
-from widgets import BorderDecorator, TitleDecorator, Screen
-
-MAX_SAMPLES: int = 400
-
-graph_font = ImageFont.truetype("inconsolata.ttf", 12)
+from network import IfSampler
 
 
 class TkWindow(Framebuffer):
@@ -62,18 +59,7 @@ if __name__ == "__main__":
     with fb as display:
         display.clear(Color(128, 0, 128, 255))
 
-        ssg = SeriesGraph(sent_sampler, size=Dimension(MAX_SAMPLES * 2, 80))
-        ssgd = SeriesGraphDecorator(ssg, graph_font)
-        sent = TitleDecorator(BorderDecorator(ssgd, border_width=24), "eth0:sent")
-        recv = TitleDecorator(
-            BorderDecorator(
-                SeriesGraphDecorator(
-                    SeriesGraph(recv_sampler, size=Dimension(MAX_SAMPLES*2, 80)),
-                    graph_font),
-                border_width=24),
-            "eth0:recv")
-        widgets: list[Tuple[Widget, Point]] = [(sent, Point(40, 40)), (recv, Point(40, 200))]
-        screen = Screen(display, widgets)
+        screen = Screen(display, panel(sent_sampler, recv_sampler))
 
         asyncio.set_event_loop_policy(aiotkinter.TkinterEventLoopPolicy())
         loop = asyncio.new_event_loop()

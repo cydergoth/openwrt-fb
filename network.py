@@ -26,7 +26,7 @@ black: Color = getrgb("black")
 blue: Color  = getrgb("blue")
 
 MAX_SAMPLES: int = 400
-graph_font = ImageFont.truetype("inconsolata.ttf", 12)
+graph_font = ImageFont.truetype("inconsolata.ttf", 24)
 
 
 class IfSampler:
@@ -54,6 +54,10 @@ class IfSampler:
         self._last_sample = val
         self._last_sample_ts = datetime.datetime.now()
         self._buffer.append(delta)
+
+    @property
+    def last_sample(self):
+        return self._last_sample
 
     def copy(self):
         return self._buffer.copy()
@@ -84,7 +88,7 @@ class SeriesGraph(Widget):
         # normalize
         scaled_samples = [x/self._max for x in series]
         heights = [floor(x*h) for x in scaled_samples]
-        drawable.rectangle([0, 0, w, h], fill=self._background)
+        #drawable.rectangle([0, 0, w, h], fill=self._background)
         s_x = 0
         for sample in heights:
             drawable.line([s_x, h, s_x, h-sample], fill=white, width=2)
@@ -144,8 +148,8 @@ class SeriesGraphDecorator(WidgetDecorator):
         drawable.line([ox-2, oy, ox-2, oy+wh+1], fill=blue, width=2)  # Y axis
         drawable.line([ox-1, oy+wh+1, ox-1+ww, oy+wh+1], fill=blue, width=2)  # X axis
         # Upper left axis tag
-        maxInMiB = self._widget.max//1048576
-        drawable.text((0, 0), f"{maxInMiB}")
+        maxInKiB = self._widget.max//1024
+        drawable.text((0, 0), f"{maxInKiB}")
         # Bottom left axix label
         (_, _, fw, fh) = self._font.getbbox(f"-{(ww/2)//60}", anchor="la")
         drawable.text((ox-1-fw/2, oy+4+wh), f"-{(ww/2)//60}", anchor="la")

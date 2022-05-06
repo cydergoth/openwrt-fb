@@ -173,15 +173,20 @@ class BarGaugeWidget(Widget):
                  **kwargs):
         """Create a new bar graph widget."""
         super().__init__(**kwargs)
+        self._high_water = 0
         self._value_reporter = value_reporter
 
     def ddraw(self, drawable):
         """Render the bar graph into this widget."""
         (w, h) = self._size
-        value = self._value_reporter()  # 0 .. 1
-        split: int = round(self._size * value)
-        drawable.rectangle([0, 0, h - split, w], fill=green)
-        drawable.rectangle([0, h, split, w], fill=red)
+        value: float = self._value_reporter()  # 0 .. 1
+        split: int = round(h * value)
+        if split > self._high_water:
+            self._high_water = split
+
+        drawable.rectangle([0, 0, w, split], fill=red)
+        drawable.rectangle([0, split, w, h - split - 1], fill=green)
+        drawable.line([0, h - self._high_water - 1, w, h - 1 - self._high_water], fill=white, width=2)
 
 
 class TextWidget(Widget):
